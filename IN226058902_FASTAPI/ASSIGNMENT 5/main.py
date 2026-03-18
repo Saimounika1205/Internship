@@ -61,6 +61,19 @@ def home():
 def get_all_products():
     return {'products': products, 'total': len(products)}
 
+@app.get('/products/browse') 
+def browse_products( keyword: str = Query(None), sort_by: str = Query('price'), order: str = Query('asc'), page: int = Query(1, ge=1), limit: int = Query(4, ge=1, le=20), ): 
+    # Step 1: Search 
+    result = products 
+    if keyword: 
+        result = [p for p in result if keyword.lower() in p['name'].lower()] 
+    # Step 2: Sort 
+    if sort_by in ['price', 'name']: result = sorted(result, key=lambda p: p[sort_by], reverse=(order=='desc')) # Step 3: Paginate 
+    total = len(result) 
+    start = (page - 1) * limit 
+    paged = result[start : start + limit] 
+    return { 'keyword': keyword, 'sort_by': sort_by, 'order': order, 'page': page, 'limit': limit, 'total_found': total, 'total_pages': -(- total // limit), 'products': paged, }
+
 # ── Day 2 ─────────────────────────────────────────────────────────
 @app.get('/products/filter')
 def filter_products(
@@ -164,6 +177,11 @@ def add_product(new_product: NewProduct, response: Response):
     response.status_code = status.HTTP_201_CREATED
     return {'message': 'Product added', 'product': product}
 
+@app.get('/products/sort-by-category') 
+def sort_by_category(): # key returns a tuple — Python sorts by first value, # then by second value when first values are equal 
+    result = sorted(products, key=lambda p: (p['category'], p['price'])) 
+    return {'products': result, 'total': len(result)}
+
 @app.put('/products/{product_id}')
 def update_product(
     product_id: int,
@@ -251,6 +269,13 @@ def add_to_cart(
     cart.append(cart_item)
     return {'message': 'Added to cart', 'cart_item': cart_item}
 
+@app.get('/orders/search') 
+def search_orders(customer_name: str = Query(...)): 
+    results = [ o for o in orders if customer_name.lower() in o['customer_name'].lower() ] 
+    if not results: 
+        return {'message': f'No orders found for: {customer_name}'} 
+    return {'customer_name': customer_name, 'total_found': len(results), 'orders': results}
+
 @app.get('/cart')
 def view_cart():
     if not cart:
@@ -260,6 +285,11 @@ def view_cart():
         'item_count':  len(cart),
         'grand_total': sum(i['subtotal'] for i in cart),
     }
+
+@app.get('/orders/page') 
+def get_orders_paged( page: int = Query(1, ge=1), limit: int = Query(3, ge=1, le=20), ): 
+    start = (page - 1) * limit 
+    return { 'page': page, 'limit': limit, 'total': len(orders), 'total_pages': -(-len(orders) // limit), 'orders': orders[start : start + limit], }
 
 @app.post('/cart/checkout')
 def checkout(checkout_data: CheckoutRequest, response: Response):
